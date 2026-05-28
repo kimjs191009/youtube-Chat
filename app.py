@@ -1,4 +1,4 @@
-```python
+
 import re
 from collections import Counter
 
@@ -311,4 +311,4 @@ if st.button("댓글 분석 시작"):
 
     else:
         st.warning("워드클라우드를 생성할 단어가 부족합니다.")
-```
+
