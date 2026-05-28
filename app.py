@@ -28,7 +28,7 @@ max_comments = st.sidebar.slider(
 
 def extract_video_id(url):
 
-```
+
 patterns = [
     r"v=([a-zA-Z0-9_-]{11})",
     r"youtu\.be/([a-zA-Z0-9_-]{11})"
@@ -42,7 +42,7 @@ for pattern in patterns:
         return match.group(1)
 
 return None
-```
+
 
 def get_comments(api_key, video_id, max_comments):
 
@@ -90,20 +90,20 @@ while len(comments) < max_comments:
         break
 
 return pd.DataFrame(comments)
-```
+
 
 def clean_text(text):
 
-```
+
 text = re.sub(r"http\S+", "", text)
 text = re.sub(r"[^가-힣a-zA-Z0-9\s]", "", text)
 
 return text.lower()
-```
+
 
 def extract_keywords(text):
 
-```
+
 stopwords = {
     "그리고",
     "하지만",
@@ -127,11 +127,11 @@ return [
     word for word in words
     if len(word) >= 2 and word not in stopwords
 ]
-```
+
 
 def create_wordcloud(words):
 
-```
+
 counter = Counter(words)
 
 return WordCloud(
@@ -140,11 +140,11 @@ return WordCloud(
     background_color="white",
     collocations=False
 ).generate_from_frequencies(counter)
-```
+
 
 if st.button("댓글 분석 시작"):
 
-```
+
 if not api_key:
     st.error("YouTube API Key를 입력하세요.")
     st.stop()
