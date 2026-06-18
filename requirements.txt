@@ -4,4 +4,3 @@ google-api-python-client
 plotly
 wordcloud
 matplotlib
-collections-extended
