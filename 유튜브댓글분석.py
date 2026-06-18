@@ -1,9 +1,17 @@
 import re
-import pandas as pd
+from collections import Counter
+
 import streamlit as st
+import pandas as pd
 import plotly.express as px
+import matplotlib.pyplot as plt
 
 from googleapiclient.discovery import build
+from wordcloud import WordCloud
+
+# ---------------------------------
+# 페이지 설정
+# ---------------------------------
 
 st.set_page_config(
     page_title="유튜브 댓글 분석기",
@@ -11,9 +19,9 @@ st.set_page_config(
     layout="wide"
 )
 
-# ------------------
+# ---------------------------------
 # API KEY
-# ------------------
+# ---------------------------------
 
 try:
     API_KEY = st.secrets["YOUTUBE_API_KEY"]
@@ -27,9 +35,9 @@ youtube = build(
     developerKey=API_KEY
 )
 
-# ------------------
+# ---------------------------------
 # 함수
-# ------------------
+# ---------------------------------
 
 def extract_video_id(url):
     patterns = [
@@ -39,6 +47,7 @@ def extract_video_id(url):
 
     for pattern in patterns:
         match = re.search(pattern, url)
+
         if match:
             return match.group(1)
 
@@ -67,12 +76,12 @@ def get_video_info(video_id):
     }
 
 
-def get_comments(video_id, max_comments=300):
+def get_comments(video_id, limit=300):
 
     comments = []
     next_page_token = None
 
-    while len(comments) < max_comments:
+    while len(comments) < limit:
 
         request = youtube.commentThreads().list(
             part="snippet",
@@ -86,11 +95,11 @@ def get_comments(video_id, max_comments=300):
 
         for item in response["items"]:
 
-            text = item["snippet"]["topLevelComment"]["snippet"]["textDisplay"]
+            comment = item["snippet"]["topLevelComment"]["snippet"]["textDisplay"]
 
-            comments.append(text)
+            comments.append(comment)
 
-            if len(comments) >= max_comments:
+            if len(comments) >= limit:
                 break
 
         next_page_token = response.get("nextPageToken")
@@ -101,20 +110,21 @@ def get_comments(video_id, max_comments=300):
     return comments
 
 
-# ------------------
+# ---------------------------------
 # UI
-# ------------------
+# ---------------------------------
 
-st.title("📺 YouTube 댓글 분석 대시보드")
+st.title("📺 유튜브 댓글 분석기")
 
-st.markdown(
-    "유튜브 영상 URL을 입력하면 댓글을 분석합니다."
+st.write(
+    "유튜브 URL을 입력하면 댓글을 수집하고 분석합니다."
 )
 
 st.sidebar.header("설정")
 
 video_url = st.sidebar.text_input(
-    "YouTube 영상 URL"
+    "YouTube 영상 URL",
+    placeholder="https://www.youtube.com/watch?v=..."
 )
 
 comment_count = st.sidebar.slider(
@@ -150,45 +160,45 @@ if st.button("📊 분석 시작"):
         st.error("댓글을 가져오지 못했습니다.")
         st.stop()
 
+    # -------------------------
+    # 영상 정보
+    # -------------------------
+
     st.success(f"{len(comments)}개 댓글 수집 완료")
 
-    # 영상 정보
+    st.subheader("📹 영상 정보")
+
     col1, col2, col3 = st.columns(3)
 
-    col1.metric(
-        "조회수",
-        f"{info['views']:,}"
-    )
+    col1.metric("조회수", f"{info['views']:,}")
+    col2.metric("좋아요", f"{info['likes']:,}")
+    col3.metric("댓글 수", f"{len(comments):,}")
 
-    col2.metric(
-        "좋아요",
-        f"{info['likes']:,}"
-    )
+    st.write(f"**제목:** {info['title']}")
+    st.write(f"**채널:** {info['channel']}")
 
-    col3.metric(
-        "댓글 수집",
-        f"{len(comments):,}"
-    )
-
-    st.subheader("영상 정보")
-
-    st.write(f"제목 : {info['title']}")
-    st.write(f"채널 : {info['channel']}")
-
+    # -------------------------
     # 댓글 데이터
+    # -------------------------
+
     df = pd.DataFrame({
         "댓글": comments
     })
 
-    st.subheader("댓글 데이터")
+    st.subheader("💬 댓글 목록")
 
     st.dataframe(
         df,
         use_container_width=True
     )
 
+    # -------------------------
     # 댓글 길이 분석
+    # -------------------------
+
     df["길이"] = df["댓글"].str.len()
+
+    st.subheader("📈 댓글 길이 분포")
 
     fig = px.histogram(
         df,
@@ -201,23 +211,103 @@ if st.button("📊 분석 시작"):
         use_container_width=True
     )
 
-    st.subheader("통계")
-
     st.write(
         f"평균 댓글 길이 : {df['길이'].mean():.1f}자"
     )
 
-    st.write(
-        f"최대 댓글 길이 : {df['길이'].max()}자"
+    # -------------------------
+    # 단어 분석
+    # -------------------------
+
+    st.subheader("☁️ 워드클라우드")
+
+    text = " ".join(comments)
+
+    words = re.findall(
+        r"[가-힣A-Za-z]{2,}",
+        text
     )
+
+    stop_words = {
+        "진짜", "정말", "너무", "그냥",
+        "근데", "이거", "저거",
+        "영상", "유튜브",
+        "합니다", "입니다", "있는",
+        "하는", "그리고", "에서"
+    }
+
+    words = [
+        word
+        for word in words
+        if word not in stop_words
+    ]
+
+    if words:
+
+        word_count = Counter(words)
+
+        top_words = word_count.most_common(20)
+
+        top_df = pd.DataFrame(
+            top_words,
+            columns=["단어", "횟수"]
+        )
+
+        try:
+
+            wordcloud = WordCloud(
+                width=1200,
+                height=600,
+                background_color="white"
+            ).generate(" ".join(words))
+
+            fig_wc, ax = plt.subplots(
+                figsize=(12, 6)
+            )
+
+            ax.imshow(wordcloud)
+            ax.axis("off")
+
+            st.pyplot(fig_wc)
+
+        except Exception as e:
+
+            st.warning(
+                f"워드클라우드 생성 실패: {e}"
+            )
+
+        st.subheader("🔥 자주 등장한 단어 TOP 20")
+
+        st.dataframe(
+            top_df,
+            use_container_width=True
+        )
+
+        fig_words = px.bar(
+            top_df,
+            x="단어",
+            y="횟수",
+            title="자주 등장한 단어 TOP20"
+        )
+
+        st.plotly_chart(
+            fig_words,
+            use_container_width=True
+        )
+
+    # -------------------------
+    # CSV 다운로드
+    # -------------------------
+
+    st.subheader("📥 데이터 다운로드")
 
     csv = df.to_csv(
         index=False
     ).encode("utf-8-sig")
 
     st.download_button(
-        "CSV 다운로드",
-        csv,
+        label="CSV 다운로드",
+        data=csv,
         file_name="youtube_comments.csv",
         mime="text/csv"
     )
